@@ -4,22 +4,25 @@ import tempfile
 import os
 from typing import Dict, Any
 from handler import HeartSoundHandler
+from xray_handler import XRayPneumoniaHandler
 
 # Create router instance
 router = APIRouter(
     prefix="/api/v1",
-    tags=["heart-sound-prediction"]
+    tags=["medical-prediction"]
 )
 
-# Initialize handler
-handler = HeartSoundHandler()
+# Initialize handlers
+heart_handler = HeartSoundHandler()
+xray_handler = XRayPneumoniaHandler()
 
 @router.get("/health")
 async def health_check() -> Dict[str, str]:
     """Health check endpoint"""
-    return {"status": "healthy", "service": "Heart Sound Prediction API"}
+    return {"status": "healthy", "service": "Medical Prediction API"}
 
-@router.post("/predict")
+# Heart Sound Prediction Endpoints
+@router.post("/predict/heart-sound")
 async def predict_heart_sound(
     audio_file: UploadFile = File(..., description="Audio file (.wav format)")
 ) -> Dict[str, Any]:
@@ -57,7 +60,7 @@ async def predict_heart_sound(
         
         try:
             # Get prediction from handler
-            result = await handler.predict_audio(temp_file_path)
+            result = await heart_handler.predict_audio(temp_file_path)
             
             return {
                 "success": True,
@@ -78,6 +81,70 @@ async def predict_heart_sound(
         raise HTTPException(
             status_code=500,
             detail=f"Error processing audio file: {str(e)}"
+        )
+
+# X-ray Pneumonia Prediction Endpoints
+@router.post("/predict/xray-pneumonia")
+async def predict_xray_pneumonia(
+    image_file: UploadFile = File(..., description="X-ray image file (.jpg, .jpeg, .png)")
+) -> Dict[str, Any]:
+    """
+    Predict pneumonia from uploaded X-ray image
+    
+    Args:
+        image_file: X-ray image file to analyze
+        
+    Returns:
+        JSON response with prediction result
+    """
+    
+    # Validate file type
+    allowed_extensions = ['.jpg', '.jpeg', '.png', '.bmp', '.tiff']
+    file_extension = os.path.splitext(image_file.filename.lower())[1]
+    if file_extension not in allowed_extensions:
+        raise HTTPException(
+            status_code=400, 
+            detail=f"Unsupported file type. Allowed types: {', '.join(allowed_extensions)}"
+        )
+    
+    # Check file size (limit to 10MB)
+    if image_file.size and image_file.size > 10 * 1024 * 1024:
+        raise HTTPException(
+            status_code=400,
+            detail="File size too large. Maximum size is 10MB"
+        )
+    
+    try:
+        # Read the uploaded image file
+        image_content = await image_file.read()
+        
+        # Get prediction from handler using image bytes
+        result = await xray_handler.predict_xray(image_bytes=image_content)
+        
+        if result["prediction"] == "error":
+            raise HTTPException(
+                status_code=500,
+                detail=f"Error during prediction: {result.get('error', 'Unknown error')}"
+            )
+        
+        return {
+            "success": True,
+            "filename": image_file.filename,
+            "file_size": len(image_content),
+            "prediction": result["prediction"],
+            "confidence": result["confidence"],
+            "probability_pneumonia": result["probability_pneumonia"],
+            "probability_normal": result["probability_normal"],
+            "processing_time": result["processing_time"],
+            "message": "X-ray pneumonia analysis completed successfully"
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Error processing X-ray image: {str(e)}"
         )
 
 @router.post("/predict-batch")
@@ -121,7 +188,7 @@ async def predict_batch_heart_sounds(
             
             try:
                 # Get prediction
-                result = await handler.predict_audio(temp_file_path)
+                result = await heart_handler.predict_audio(temp_file_path)
                 
                 results.append({
                     "filename": audio_file.filename,
@@ -151,11 +218,11 @@ async def predict_batch_heart_sounds(
         "errors": errors if errors else None
     }
 
-@router.get("/model-info")
-async def get_model_info() -> Dict[str, Any]:
-    """Get information about the loaded model"""
+@router.get("/model-info/heart-sound")
+async def get_heart_sound_model_info() -> Dict[str, Any]:
+    """Get information about the loaded heart sound model"""
     try:
-        info = await handler.get_model_info()
+        info = await heart_handler.get_model_info()
         return {
             "success": True,
             "model_info": info
@@ -163,5 +230,44 @@ async def get_model_info() -> Dict[str, Any]:
     except Exception as e:
         raise HTTPException(
             status_code=500,
-            detail=f"Error getting model info: {str(e)}"
+            detail=f"Error getting heart sound model info: {str(e)}"
+        )
+
+@router.get("/model-info/xray-pneumonia")
+async def get_xray_model_info() -> Dict[str, Any]:
+    """Get information about the loaded X-ray pneumonia model"""
+    try:
+        info = await xray_handler.get_model_info()
+        return {
+            "success": True,
+            "model_info": info
+        }
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Error getting X-ray model info: {str(e)}"
+        )
+
+@router.get("/health/heart-sound")
+async def heart_sound_health_check() -> Dict[str, Any]:
+    """Health check for heart sound prediction service"""
+    try:
+        health_info = await heart_handler.health_check()
+        return health_info
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Error checking heart sound service health: {str(e)}"
+        )
+
+@router.get("/health/xray-pneumonia")
+async def xray_health_check() -> Dict[str, Any]:
+    """Health check for X-ray pneumonia prediction service"""
+    try:
+        health_info = await xray_handler.health_check()
+        return health_info
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Error checking X-ray service health: {str(e)}"
         ) 
