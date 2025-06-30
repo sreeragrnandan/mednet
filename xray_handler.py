@@ -6,18 +6,21 @@ import numpy as np
 import tensorflow as tf
 from PIL import Image
 import io
+import gdown
 
 class XRayPneumoniaHandler:
     """Handler class for X-ray pneumonia prediction operations"""
     
-    def __init__(self, model_path: str = "xray_pneumonia_model.keras"):
+    def __init__(self, model_path: str = "xray_pneumonia_model.keras", model_url: str = None):
         """
-        Initialize the handler with model path
+        Initialize the handler with model path and optional Google Drive URL
         
         Args:
-            model_path: Path to the trained Keras model for X-ray pneumonia classification
+            model_path: Path to save/load the trained Keras model for X-ray pneumonia classification
+            model_url: Optional Google Drive URL to download the model from
         """
         self.model_path = model_path
+        self.model_url = model_url
         self.model = None
         self.target_size = (180, 180)  # Input size expected by the model
         self._load_model()
@@ -25,6 +28,11 @@ class XRayPneumoniaHandler:
     def _load_model(self):
         """Load the Keras model on initialization"""
         try:
+            # Download model from Google Drive if URL is provided and model doesn't exist
+            if self.model_url and not os.path.exists(self.model_path):
+                print(f"Downloading X-ray model from {self.model_url}")
+                gdown.download(self.model_url, self.model_path, quiet=False)
+            
             if os.path.exists(self.model_path):
                 self.model = tf.keras.models.load_model(self.model_path)
                 print(f"X-ray pneumonia model loaded successfully from {self.model_path}")

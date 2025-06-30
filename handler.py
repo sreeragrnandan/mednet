@@ -6,18 +6,21 @@ import numpy as np
 from predict import predict_heart_sound, extract_features
 import librosa
 import keras
+import gdown
 
 class HeartSoundHandler:
     """Handler class for heart sound prediction operations"""
     
-    def __init__(self, model_path: str = "model_fold_1.keras"):
+    def __init__(self, model_path: str = "model_fold_1.keras", model_url: str = None):
         """
-        Initialize the handler with model path
+        Initialize the handler with model path and optional Google Drive URL
         
         Args:
-            model_path: Path to the trained Keras model
+            model_path: Path to save/load the trained Keras model
+            model_url: Optional Google Drive URL to download the model from
         """
         self.model_path = model_path
+        self.model_url = model_url
         self.model = None
         self._load_model()
     
@@ -30,6 +33,11 @@ class HeartSoundHandler:
                 'F1Score': F1Score,
                 'f1_score': F1Score
             }
+            
+            # Download model from Google Drive if URL is provided and model doesn't exist
+            if self.model_url and not os.path.exists(self.model_path):
+                print(f"Downloading model from {self.model_url}")
+                gdown.download(self.model_url, self.model_path, quiet=False)
             
             # Try to load the model
             try:

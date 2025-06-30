@@ -12,9 +12,13 @@ router = APIRouter(
     tags=["medical-prediction"]
 )
 
-# Initialize handlers
-heart_handler = HeartSoundHandler()
-xray_handler = XRayPneumoniaHandler()
+# Model URLs from Google Drive (to be replaced with your actual shared URLs)
+HEART_MODEL_URL = os.getenv("HEART_MODEL_URL", None)  # Set this in environment variables
+XRAY_MODEL_URL = os.getenv("XRAY_MODEL_URL", None)   # Set this in environment variables
+
+# Initialize handlers with Google Drive URLs
+heart_handler = HeartSoundHandler(model_url=HEART_MODEL_URL)
+xray_handler = XRayPneumoniaHandler(model_url=XRAY_MODEL_URL)
 
 @router.get("/health")
 async def health_check() -> Dict[str, str]:
