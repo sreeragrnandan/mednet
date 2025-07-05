@@ -3,6 +3,16 @@ import time
 from typing import Dict, Any, Optional
 import os
 import numpy as np
+
+# Fix for scipy compatibility with librosa
+try:
+    import scipy.signal
+    if not hasattr(scipy.signal, 'hann'):
+        import scipy.signal.windows
+        scipy.signal.hann = scipy.signal.windows.hann
+except ImportError:
+    pass
+
 from predict import predict_heart_sound, extract_features
 import librosa
 import keras
@@ -56,6 +66,11 @@ class HeartSoundHandler:
                 
         except Exception as e:
             print(f"Error loading model: {e}")
+            if not os.path.exists(self.model_path):
+                print(f"Model file not found at {self.model_path}")
+                print("Please either:")
+                print("1. Place your trained model file at the specified path, or")
+                print("2. Set the HEART_MODEL_URL environment variable with a Google Drive download link")
             self.model = None
     
     def _calculate_risk_level(self, probabilities: Dict[str, float]) -> tuple[str, float]:
@@ -63,11 +78,15 @@ class HeartSoundHandler:
         Calculate risk level and score based on prediction probabilities
         
         Args:
-            probabilities: Dictionary of class probabilities
+            probabilities: Dictionary of class probabilities (can be None)
             
         Returns:
             Tuple of (risk_level, risk_score)
         """
+        # Handle case where probabilities is None (fallback prediction)
+        if probabilities is None:
+            return "error", 0.0
+        
         # Calculate risk score (0-100)
         risk_score = (probabilities.get('abnormal', 0) * 100 + 
                      probabilities.get('uncertain', 0) * 50)
@@ -282,10 +301,19 @@ class HeartSoundHandler:
         except Exception as e:
             # Fallback to simple prediction function
             simple_prediction = predict_heart_sound(audio_file_path, self.model_path)
+            
+            # Provide default probabilities based on simple prediction
+            if simple_prediction == "abnormal":
+                probabilities = {"normal": 0.0, "abnormal": 1.0, "uncertain": 0.0}
+            elif simple_prediction == "uncertain":
+                probabilities = {"normal": 0.0, "abnormal": 0.0, "uncertain": 1.0}
+            else:  # normal or error
+                probabilities = {"normal": 1.0, "abnormal": 0.0, "uncertain": 0.0}
+            
             return {
                 "class": simple_prediction,
                 "confidence": 0.0,
-                "probabilities": None
+                "probabilities": probabilities
             }
     
     async def _get_audio_info(self, audio_file_path: str) -> Dict[str, Any]:

@@ -6,6 +6,15 @@ os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
 os.environ['TF_ENABLE_ONEDNN_OPTS'] = '0'  # Suppress oneDNN warnings
 warnings.filterwarnings('ignore')
 
+# Fix for scipy compatibility with librosa
+try:
+    import scipy.signal
+    if not hasattr(scipy.signal, 'hann'):
+        import scipy.signal.windows
+        scipy.signal.hann = scipy.signal.windows.hann
+except ImportError:
+    pass
+
 import numpy as np
 import librosa
 import keras

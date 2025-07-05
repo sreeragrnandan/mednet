@@ -12,13 +12,9 @@ router = APIRouter(
     tags=["medical-prediction"]
 )
 
-# Model URLs from Google Drive (to be replaced with your actual shared URLs)
-HEART_MODEL_URL = os.getenv("HEART_MODEL_URL", None)  # Set this in environment variables
-XRAY_MODEL_URL = os.getenv("XRAY_MODEL_URL", None)   # Set this in environment variables
-
-# Initialize handlers with Google Drive URLs
-heart_handler = HeartSoundHandler(model_url=HEART_MODEL_URL)
-xray_handler = XRayPneumoniaHandler(model_url=XRAY_MODEL_URL)
+# Initialize handlers with local model files (no URLs needed since files exist locally)
+heart_handler = HeartSoundHandler()  # Will use default model_fold_1.keras
+xray_handler = XRayPneumoniaHandler()  # Will use default xray_pneumonia_model.keras
 
 @router.get("/health")
 async def health_check() -> Dict[str, str]:

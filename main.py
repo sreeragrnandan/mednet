@@ -2,8 +2,45 @@ from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 import uvicorn
-from router import router
 import os
+import gdown
+
+# Download models from Google Drive if they don't exist locally
+def download_models():
+    """Download model files from Google Drive if they don't exist locally"""
+    
+    # Model URLs and file paths
+    models = [
+        {
+            "url": "https://drive.google.com/uc?id=1F60Octn-RTJzvBw56jZL9S7Km0gCunpO",
+            "file_path": "model_fold_1.keras",
+            "name": "Heart Sound Model"
+        },
+        {
+            "url": "https://drive.google.com/uc?id=1yg1OrvN_47FCYj6pt00fecc8LoG2ltWn", 
+            "file_path": "xray_pneumonia_model.keras",
+            "name": "X-ray Pneumonia Model"
+        }
+    ]
+    
+    for model in models:
+        if not os.path.exists(model["file_path"]):
+            print(f"Downloading {model['name']} from Google Drive...")
+            try:
+                gdown.download(model["url"], model["file_path"], quiet=False)
+                print(f"✓ Successfully downloaded {model['name']}")
+            except Exception as e:
+                print(f"✗ Error downloading {model['name']}: {str(e)}")
+                print(f"  Please manually download from: {model['url']}")
+        else:
+            print(f"✓ {model['name']} already exists at {model['file_path']}")
+
+# Download models at startup
+print("=== Model Download Check ===")
+download_models()
+print("=== Starting API Server ===")
+
+from router import router
 
 # Create FastAPI application
 app = FastAPI(
@@ -66,6 +103,7 @@ async def app_health():
         "service": "Heart Sound Prediction API",
         "model_file_exists": os.path.exists("model_fold_1.keras")
     }
+
 
 if __name__ == "__main__":
     # Run the application
