@@ -111,23 +111,14 @@ async def predict_xray_pneumonia(
         # Get prediction from handler using image bytes
         result = await xray_handler.predict_xray(image_bytes=image_content)
         
-        if result["prediction"] == "error":
+        if result["diagnosis"] == "error":
             raise HTTPException(
                 status_code=500,
                 detail=f"Error during prediction: {result.get('error', 'Unknown error')}"
             )
         
-        return {
-            "success": True,
-            "filename": image_file.filename,
-            "file_size": len(image_content),
-            "prediction": result["prediction"],
-            "confidence": result["confidence"],
-            "probability_pneumonia": result["probability_pneumonia"],
-            "probability_normal": result["probability_normal"],
-            "processing_time": result["processing_time"],
-            "message": "X-ray pneumonia analysis completed successfully"
-        }
+        # Return the new format directly from the handler
+        return result
         
     except HTTPException:
         raise
