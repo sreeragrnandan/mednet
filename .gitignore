@@ -20,3 +20,8 @@ __pycache__/*
 *.pyzwz
 
 *.jpeg
+
+venv
+venv/*
+
+.gitattributes

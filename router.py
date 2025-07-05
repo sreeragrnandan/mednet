@@ -1,8 +1,8 @@
-from fastapi import APIRouter, UploadFile, File, HTTPException
+from fastapi import APIRouter, UploadFile, File, HTTPException, Query
 from fastapi.responses import JSONResponse
 import tempfile
 import os
-from typing import Dict, Any
+from typing import Dict, Any, Optional
 from handler import HeartSoundHandler
 from xray_handler import XRayPneumoniaHandler
 
@@ -28,58 +28,51 @@ async def health_check() -> Dict[str, str]:
 # Heart Sound Prediction Endpoints
 @router.post("/predict/heart-sound")
 async def predict_heart_sound(
-    audio_file: UploadFile = File(..., description="Audio file (.wav format)")
+    audio_file: UploadFile = File(...),
+    save_audio: bool = Query(False, description="Whether to save and return the audio URL")
 ) -> Dict[str, Any]:
     """
     Predict heart sound classification from uploaded audio file
     
-    Args:
-        audio_file: WAV audio file to analyze
-        
-    Returns:
-        JSON response with prediction result
+    Returns a detailed analysis including:
+    - Unique ID for the prediction
+    - Timestamp
+    - Risk level assessment
+    - Risk score
+    - Confidence score
+    - Audio metrics (irregularity, murmur, clarity, rhythm)
+    - Optional notes
+    - Optional audio URL if save_audio is True
     """
-    
-    # Validate file type
-    if not audio_file.filename.lower().endswith('.wav'):
-        raise HTTPException(
-            status_code=400, 
-            detail="Only WAV files are supported"
-        )
-    
-    # Check file size (limit to 10MB)
-    if audio_file.size and audio_file.size > 10 * 1024 * 1024:
-        raise HTTPException(
-            status_code=400,
-            detail="File size too large. Maximum size is 10MB"
-        )
-    
     try:
-        # Create temporary file to save uploaded audio
+        if not audio_file.filename.endswith('.wav'):
+            raise HTTPException(
+                status_code=400,
+                detail="Only .wav files are supported"
+            )
+        
+        # Save uploaded file temporarily
         with tempfile.NamedTemporaryFile(delete=False, suffix='.wav') as temp_file:
-            # Read and save uploaded file
-            content = await audio_file.read()
-            temp_file.write(content)
-            temp_file_path = temp_file.name
+            temp_file.write(await audio_file.read())
+            temp_path = temp_file.name
         
         try:
-            # Get prediction from handler
-            result = await heart_handler.predict_audio(temp_file_path)
+            # Get prediction with detailed analysis
+            result = await heart_handler.predict_audio(temp_path, save_audio=save_audio)
             
-            return {
-                "success": True,
-                "filename": audio_file.filename,
-                "file_size": len(content),
-                "prediction": result["prediction"],
-                "confidence": result.get("confidence"),
-                "processing_time": result.get("processing_time"),
-                "message": "Heart sound analysis completed successfully"
-            }
+            # Clean up temp file if we're not saving it
+            if not save_audio:
+                os.unlink(temp_path)
+                
+            return JSONResponse(
+                content=result,
+                status_code=200
+            )
             
         finally:
-            # Clean up temporary file
-            if os.path.exists(temp_file_path):
-                os.unlink(temp_file_path)
+            # Ensure temp file is cleaned up if not saved
+            if not save_audio and os.path.exists(temp_path):
+                os.unlink(temp_path)
                 
     except Exception as e:
         raise HTTPException(

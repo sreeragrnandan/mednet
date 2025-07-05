@@ -7,6 +7,8 @@ from predict import predict_heart_sound, extract_features
 import librosa
 import keras
 import gdown
+import uuid
+from datetime import datetime
 
 class HeartSoundHandler:
     """Handler class for heart sound prediction operations"""
@@ -56,15 +58,85 @@ class HeartSoundHandler:
             print(f"Error loading model: {e}")
             self.model = None
     
-    async def predict_audio(self, audio_file_path: str) -> Dict[str, Any]:
+    def _calculate_risk_level(self, probabilities: Dict[str, float]) -> tuple[str, float]:
+        """
+        Calculate risk level and score based on prediction probabilities
+        
+        Args:
+            probabilities: Dictionary of class probabilities
+            
+        Returns:
+            Tuple of (risk_level, risk_score)
+        """
+        # Calculate risk score (0-100)
+        risk_score = (probabilities.get('abnormal', 0) * 100 + 
+                     probabilities.get('uncertain', 0) * 50)
+        
+        # Determine risk level
+        if risk_score < 30:
+            risk_level = "low"
+        elif risk_score < 70:
+            risk_level = "moderate"
+        else:
+            risk_level = "high"
+            
+        return risk_level, risk_score
+
+    def _calculate_audio_metrics(self, audio_segment: np.ndarray, sr: int) -> Dict[str, float]:
+        """
+        Calculate various audio quality and characteristic metrics
+        
+        Args:
+            audio_segment: Audio signal array
+            sr: Sample rate
+            
+        Returns:
+            Dictionary of audio metrics
+        """
+        try:
+            # Calculate rhythm metric using tempo detection
+            tempo, _ = librosa.beat.beat_track(y=audio_segment, sr=sr)
+            rhythm_score = min(100, max(0, 100 - abs(tempo - 60) / 2))  # Normalize around 60 BPM
+            
+            # Calculate clarity using signal-to-noise ratio estimation
+            noise_floor = np.mean(np.abs(audio_segment[audio_segment < np.mean(audio_segment)]))
+            signal_power = np.mean(np.abs(audio_segment))
+            clarity_score = min(100, max(0, 100 * (signal_power / (noise_floor + 1e-6))))
+            
+            # Calculate irregularity using zero crossing rate
+            zero_crossings = librosa.zero_crossings(audio_segment)
+            irregularity_score = min(100, max(0, 100 * np.mean(zero_crossings)))
+            
+            # Calculate murmur likelihood using spectral rolloff
+            rolloff = librosa.feature.spectral_rolloff(y=audio_segment, sr=sr)
+            murmur_score = min(100, max(0, np.mean(rolloff) / 100))
+            
+            return {
+                "irregularity": round(irregularity_score, 2),
+                "murmur": round(murmur_score, 2),
+                "clarity": round(clarity_score, 2),
+                "rhythm": round(rhythm_score, 2)
+            }
+            
+        except Exception as e:
+            print(f"Error calculating audio metrics: {e}")
+            return {
+                "irregularity": 0,
+                "murmur": 0,
+                "clarity": 0,
+                "rhythm": 0
+            }
+
+    async def predict_audio(self, audio_file_path: str, save_audio: bool = False) -> Dict[str, Any]:
         """
         Predict heart sound classification for an audio file
         
         Args:
             audio_file_path: Path to the audio file
+            save_audio: Whether to save and return audio URL
             
         Returns:
-            Dictionary containing prediction results
+            Dictionary containing detailed prediction results
         """
         start_time = time.time()
         
@@ -72,6 +144,9 @@ class HeartSoundHandler:
             # Validate file exists
             if not os.path.exists(audio_file_path):
                 raise FileNotFoundError(f"Audio file not found: {audio_file_path}")
+            
+            # Load audio
+            audio, sr = librosa.load(audio_file_path, sr=2000)
             
             # Run prediction in thread pool to avoid blocking
             loop = asyncio.get_event_loop()
@@ -81,29 +156,79 @@ class HeartSoundHandler:
                 audio_file_path
             )
             
+            # Calculate risk level and score
+            risk_level, risk_score = self._calculate_risk_level(prediction["probabilities"])
+            
+            # Calculate audio metrics
+            metrics = self._calculate_audio_metrics(audio, sr)
+            
+            # Generate notes based on findings
+            notes = self._generate_notes(prediction["class"], risk_level, metrics)
+            
+            # Handle audio URL
+            audio_url = None
+            if save_audio:
+                # Here you would implement logic to save the audio file and generate a URL
+                # For now, we'll just use the file path
+                audio_url = audio_file_path
+            
             processing_time = time.time() - start_time
             
-            # Get additional audio info
-            audio_info = await self._get_audio_info(audio_file_path)
-            
             return {
-                "prediction": prediction["class"],
-                "confidence": prediction["confidence"],
-                "probabilities": prediction["probabilities"],
-                "processing_time": round(processing_time, 3),
-                "audio_info": audio_info
+                "id": str(uuid.uuid4()),
+                "timestamp": int(time.time() * 1000),  # milliseconds
+                "riskLevel": risk_level,
+                "riskScore": round(risk_score, 2),
+                "confidence": round(prediction["confidence"] * 100, 2),
+                "audioUrl": audio_url,
+                "metrics": metrics,
+                "notes": notes,
+                "processing_time": round(processing_time, 3)
             }
             
         except Exception as e:
             processing_time = time.time() - start_time
             return {
-                "prediction": "error",
-                "confidence": 0.0,
-                "probabilities": None,
-                "processing_time": round(processing_time, 3),
-                "error": str(e),
-                "audio_info": None
+                "id": str(uuid.uuid4()),
+                "timestamp": int(time.time() * 1000),
+                "riskLevel": "error",
+                "riskScore": 0,
+                "confidence": 0,
+                "audioUrl": None,
+                "metrics": {
+                    "irregularity": 0,
+                    "murmur": 0,
+                    "clarity": 0,
+                    "rhythm": 0
+                },
+                "notes": f"Error during prediction: {str(e)}",
+                "processing_time": round(processing_time, 3)
             }
+
+    def _generate_notes(self, prediction_class: str, risk_level: str, metrics: Dict[str, float]) -> str:
+        """Generate descriptive notes based on the analysis results"""
+        notes = []
+        
+        # Add prediction class note
+        notes.append(f"Heart sound classified as {prediction_class}.")
+        
+        # Add risk level note
+        risk_notes = {
+            "low": "No significant abnormalities detected.",
+            "moderate": "Some irregular patterns detected, follow-up recommended.",
+            "high": "Significant abnormalities detected, immediate medical attention recommended."
+        }
+        notes.append(risk_notes.get(risk_level, ""))
+        
+        # Add specific metric notes
+        if metrics["murmur"] > 50:
+            notes.append("Potential heart murmur detected.")
+        if metrics["irregularity"] > 50:
+            notes.append("Irregular heart rhythm patterns observed.")
+        if metrics["clarity"] < 50:
+            notes.append("Note: Recording quality is suboptimal.")
+        
+        return " ".join(notes)
     
     def _predict_sync(self, audio_file_path: str) -> Dict[str, Any]:
         """
