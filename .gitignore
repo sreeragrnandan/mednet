@@ -1,30 +1,46 @@
-*.wav
-*.mp3
-*.m4a
-*.flac
-*.ogg
-*.wav
-*.mp3
-*.m4a
-*.flac
-*.ogg
+# Virtual environment
+venv/
+env/
+.env
 
-__pycache__
-__pycache__/*
+# Model files (large files)
+*.keras
+*.h5
+*.pkl
+*.joblib
+
+# Large data files
+*.wav
+*.mp3
+*.flac
+*.csv
+*.json
+*.npy
+*.npz
+
+# Python cache
+__pycache__/
 *.pyc
 *.pyo
 *.pyd
-*.pyw
-*.pyz
-*.pywz
-*.pyzw
-*.pyzwz
+.Python
+*.so
 
-*.jpeg
+# IDE files
+.vscode/
+.idea/
+*.swp
+*.swo
 
-venv
-venv/*
+# OS files
+.DS_Store
+Thumbs.db
 
-.gitattributes
+# Logs
+*.log
+logs/
 
-*.keras
+# Temporary files
+*.tmp
+*.temp
+temp/

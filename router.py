@@ -28,8 +28,7 @@ async def health_check() -> Dict[str, str]:
 # Heart Sound Prediction Endpoints
 @router.post("/predict/heart-sound")
 async def predict_heart_sound(
-    audio_file: UploadFile = File(...),
-    save_audio: bool = Query(False, description="Whether to save and return the audio URL")
+    audio_file: UploadFile = File(...)
 ) -> Dict[str, Any]:
     """
     Predict heart sound classification from uploaded audio file
@@ -41,8 +40,7 @@ async def predict_heart_sound(
     - Risk score
     - Confidence score
     - Audio metrics (irregularity, murmur, clarity, rhythm)
-    - Optional notes
-    - Optional audio URL if save_audio is True
+    - Descriptive notes
     """
     try:
         if not audio_file.filename.endswith('.wav'):
@@ -58,11 +56,10 @@ async def predict_heart_sound(
         
         try:
             # Get prediction with detailed analysis
-            result = await heart_handler.predict_audio(temp_path, save_audio=save_audio)
+            result = await heart_handler.predict_audio(temp_path)
             
-            # Clean up temp file if we're not saving it
-            if not save_audio:
-                os.unlink(temp_path)
+            # Clean up temp file
+            os.unlink(temp_path)
                 
             return JSONResponse(
                 content=result,
@@ -70,8 +67,8 @@ async def predict_heart_sound(
             )
             
         finally:
-            # Ensure temp file is cleaned up if not saved
-            if not save_audio and os.path.exists(temp_path):
+            # Ensure temp file is cleaned up
+            if os.path.exists(temp_path):
                 os.unlink(temp_path)
                 
     except Exception as e:
